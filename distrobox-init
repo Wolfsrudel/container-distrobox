@@ -32,7 +32,7 @@ init_hook=""
 upgrade=0
 pre_init_hook=""
 verbose=0
-version="1.4.1"
+version="1.4.2.1"
 # Print usage to stdout.
 # Arguments:
 #   None
@@ -120,11 +120,9 @@ while :; do
 		--pre-init-hooks)
 			if [ -n "$2" ]; then
 				pre_init_hook="$2"
-				shift
-				shift
-			else
-				shift
 			fi
+			shift
+			shift
 			;;
 		--)
 			shift

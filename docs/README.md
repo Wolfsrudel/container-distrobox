@@ -41,7 +41,6 @@ graphical apps (X11/Wayland), and audio.
   - [Alternative methods](#alternative-methods)
     - [Curl](#curl)
     - [Git](#git)
-    - [Flatpak](#flatpak)
   - [Dependencies](#dependencies)
     - [Install Podman without root](compatibility.md#install-podman-in-a-static-manner)
   - [Uninstallation](#uninstallation)
@@ -85,6 +84,7 @@ graphical apps (X11/Wayland), and audio.
   - [Build a Gentoo distrobox container](distrobox_gentoo.md)
   - [Build a Dedicated distrobox container](distrobox_custom.md)
 - [Posts](posts/posts.md)
+  - [Run Libvirt using distrobox](posts/run_libvirt_in_distrobox.md)
   - [Run latest GNOME and KDE Plasma using distrobox](posts/run_latest_gnome_kde_on_distrobox.md)
   - [Integrate VSCode and Distrobox](posts/integrate_vscode_distrobox.md)
   - [Execute a command on the Host](posts/execute_commands_on_host.md)
@@ -104,9 +104,12 @@ graphical apps (X11/Wayland), and audio.
     - [Japanese input on Clear Linux with Mozc via Ubuntu container with Distrobox](https://impsbl.hatenablog.jp/entry/JapaneseInputOnClearLinuxWithMozc_en)
     - [MID (MaXX Interactive Desktop) on Clear Linux via Ubuntu container with Distrobox](https://impsbl.hatenablog.jp/entry/MIDonClearLinuxWithDistrobox_en)
     - [Running Other Linux Distros with Distrobox on Fedora Linux - bandithijo's blog](featured_articles.md)
-  - [Talks](featured_articles.md#talks)
+  - [Talks and Videos](featured_articles.md#talks)
     - [Linux App Summit 2022 - Distrobox: Run Any App On Any Distro - BoF](https://github.com/89luca89/distrobox/files/8598433/distrobox-las-talk.pdf)
+    - [Opensource Summit 2022 - Distrobox: Run Any App On Any Distro](https://www.youtube.com/watch?v=eM1p47tow4o)
     - [A "Box" Full of Tools and Distros - Dario Faggioli @ OpenSUSE Conference 2022](https://www.youtube.com/watch?v=_RzARte80SQ)
+    - [Podman Community Meeting October 4, 2022](https://www.youtube.com/watch?v=JNijOHL4_Ko)
+    - [Distrobox opens the Steam Deck to a whole new world (GUIDE) - GamingOnLinux](https://www.youtube.com/watch?v=kkkyNA31KOA)
   - [Podcasts](featured_articles.md#podcasts)
 
 ---
@@ -268,11 +271,11 @@ Example configuration file:
 
 ```conf
 container_always_pull="1"
-container_user_custom_home="$HOME/.local/share/container-home-test"
-container_image="registry.opensuse.org/opensuse/toolbox:latest"
+container_generate_entry=0
 container_manager="docker"
-container_name="test-name-1"
-container_entry=0
+container_image_default="registry.opensuse.org/opensuse/toolbox:latest"
+container_name_default="test-name-1"
+container_user_custom_home="$HOME/.local/share/container-home-test"
 container_init_hook="~/.local/distrobox/a_custom_default_init_hook.sh"
 container_pre_init_hook="~/a_custom_default_pre_init_hook.sh"
 non_interactive="1"
@@ -351,32 +354,6 @@ such as `./install --prefix ~/.distrobox`.
 
 Prefix explained: main distrobox files get installed to `${prefix}/bin` whereas
 the manpages get installed to `${prefix}/share/man`.
-
-### Flatpak
-
-⚠️ ⚠️ ⚠️  This is experimental! ⚠️ ⚠️ ⚠️
-
-You can find flatpak builds of distrobox here:
-[io.github.luca.distrobox](https://github.com/89luca89/io.github.luca.distrobox/releases)  
-Download the latest release flatpak and run
-
-```sh
-flatpak install io.github.luca.distrobox.flatpak
-```
-
-You can then run distrobox with:
-
-```sh
-flatpak run io.github.luca.distrobox create ...
-flatpak run io.github.luca.distrobox enter ...
-flatpak run io.github.luca.distrobox list ...
-[...]
-```
-
-It will  be handy to add an `alias distrobox="flatpak run io.github.luca.distrobox"` to your shell,
-so that you can run distrobox commands normally.
-
-Being experimental, please if you encounter problems, report them!
 
 ---
 
