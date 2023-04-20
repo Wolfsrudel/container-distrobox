@@ -1,5 +1,8 @@
-![distrobox-logo](https://user-images.githubusercontent.com/598882/157771834-7423cf9b-8311-4e90-8a79-cd0eff6bd632.png)
-<sub>logo credits [j4ckr3d](https://github.com/j4ckr3d)<sub>
+![distrobox-logo](./assets/page-logo-dark.svg#gh-dark-mode-only)
+![distrobox-logo](./assets/page-logo-light.svg#gh-light-mode-only)
+
+<sub>previous logo credits [j4ckr3d](https://github.com/j4ckr3d)  
+current logo credits [David Lapshin](https://github.com/daudix-UFO)<sub>
 
 # Distrobox
 
@@ -39,7 +42,7 @@ graphical apps (X11/Wayland), and audio.
     - [Aims](#aims)
 - [Installation](#installation)
   - [Alternative methods](#alternative-methods)
-    - [Curl](#curl)
+    - [Curl or Wget](#curl-or-wget)
     - [Git](#git)
   - [Dependencies](#dependencies)
     - [Install Podman without root](compatibility.md#install-podman-in-a-static-manner)
@@ -50,6 +53,7 @@ graphical apps (X11/Wayland), and audio.
   - [Containers Distros](compatibility.md#containers-distros)
 - [Usage](usage/usage.md)
   - [Outside the distrobox](usage/usage.md#outside-the-distrobox)
+    - [distrobox-assemble](usage/distrobox-assemble.md)
     - [distrobox-create](usage/distrobox-create.md)
     - [distrobox-enter](usage/distrobox-enter.md)
     - [distrobox-ephemeral](usage/distrobox-ephemeral.md)
@@ -130,10 +134,12 @@ but in a simplified way using POSIX sh and aiming at broader compatibility.
 
 All the props go to them as they had the great idea to implement this stuff.
 
-It is divided into 10 commands:
+It is divided into 12 commands:
 
+- `distrobox-assemble` - creates and destroy containers based on a config file
 - `distrobox-create` - creates the container
 - `distrobox-enter`  - to enter the container
+- `distrobox-ephemeral`  - create a temporal container, destroy it when exiting the shell
 - `distrobox-list` - to list containers created with distrobox
 - `distrobox-rm` - to delete a container created with distrobox
 - `distrobox-stop` - to stop a running container created with distrobox
@@ -171,7 +177,7 @@ Fedora Silverblue for the [uBlue](https://github.com/ublue-os) project
 - Leverage high abundance of curated distro images for docker/podman to
   manage multiple environments
 
-Refer to the compatiblity list for an overview of supported host's distro
+Refer to the compatibility list for an overview of supported host's distro
 [HERE](compatibility.md#host-distros) and container's distro [HERE](compatibility.md#containers-distros).
 
 ### Aims
@@ -226,7 +232,7 @@ Create a new distrobox:
 Enter created distrobox:
 
 `distrobox enter test`
-  
+
 Add [various](https://github.com/89luca89/distrobox/blob/main/docs/compatibility.md#host-distros)
 distroboxes, eg Ubuntu 20.04:
 
@@ -254,6 +260,59 @@ Remove a distrobox
 
 You can check [HERE for more advanced usage](usage/usage.md)
 and check a [comprehensive list of useful tips HERE](useful_tips.md)
+
+# Assemble Distrobox
+
+Manifest files can be used to declare a set of distroboxes and use
+`distrobox-assemble` to create/destroy them in batch.
+
+Take this example `distrobox-example.ini` file:
+
+```ini
+
+[alpine3]
+additional_packages=git vim tmux nodejs
+home=/tmp/home
+image=alpine:latest
+
+[debian5]
+additional_packages=git vim tmux nodejs
+home=/tmp/home
+image=debian:latest
+init=false
+init_hooks="touch /init-normal"
+
+[opensuse]
+additional_packages=git vim tmux nodejs
+home=/tmp/home
+image==opensuse/tumbleweed:latest
+init=true
+init_hooks="touch /init-normal"
+pre_init_hooks="touch /pre-init"
+pull=true
+```
+
+Using the following command:
+
+```console
+distrobox-assemble create -f ./distrobox-example.ini
+```
+
+We can create all the distroboxes at once, configured as declared in the manifest file.
+We can also recreate them from scratch using:
+
+```console
+distrobox-assemble create --replace -f ./distrobox-example.ini
+```
+
+And finally destroy all of them at once with
+
+```console
+distrobox-assemble rm -f ./distrobox-example.ini
+```
+
+Head over the [usage docs of distrobox-assemble](usage/distrobox-assemble.md)
+for a more detailed guide.
 
 # Configure Distrobox
 
@@ -311,31 +370,39 @@ You can also [follow the guide to install in a rootless manner](posts/install_ro
 
 Here is a list of alternative ways to install distrobox
 
-### Curl
+### Curl or Wget
 
 If you like to live your life dangerously, or you want the latest release,
 you can trust me and simply run this in your terminal:
 
 ```sh
 curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
+# or using wget
+wget -qO- https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
 ```
 
 or if you want to select a custom directory to install without sudo:
 
 ```sh
 curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local
+# or using wget
+wget -qO- https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local
 ```
 
 If you want to install the last development version, directly from last commit on git, you can use:
 
 ```sh
 curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh -s -- --next
+# or using wget
+wget -qO- https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh -s -- --next
 ```
 
 or:
 
 ```sh
 curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --next --prefix ~/.local
+# or using wget
+wget -qO- https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --next --prefix ~/.local
 ```
 
 > **Warning**
@@ -396,6 +463,11 @@ you can specify another directory if needed with `./uninstall --prefix ~/.local`
 
 ---
 
-![distrobox-box](https://user-images.githubusercontent.com/598882/144294113-ab3c62b0-4ff0-488f-8e85-dfecc308e561.png)
+![distro-box](./assets/distro-box.png)
 
----
+<sub>This artwork uses [Cardboard Box](https://skfb.ly/6Wq6q) model by [J0Y](https://sketchfab.com/lloydrostek)
+licensed under [Creative Commons Attribution 4.0](http://creativecommons.org/licenses/by/4.0)  
+This artwork uses [GTK Loop Animation](https://github.com/gnome-design-team/gnome-mockups/blob/master/gtk/loop6.blend)
+by [GNOME Project](https://www.gnome.org)
+licensed under [Creative Commons Attribution-ShareAlike 3.0](https://creativecommons.org/licenses/by-sa/3.0)
+as a pre-configured scene<sub>

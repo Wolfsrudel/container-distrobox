@@ -27,10 +27,12 @@
 trap '[ "$?" -ne 0 ] && printf "Error: An error occurred\n"' EXIT
 
 # Defaults
+container_additional_packages=""
 init=0
 init_hook=""
-upgrade=0
+nvidia=0
 pre_init_hook=""
+upgrade=0
 verbose=0
 version="1.4.2.1"
 # Print usage to stdout.
@@ -53,8 +55,10 @@ Options:
 	--group/-g:		gid of the user
 	--home/-d:		path/to/home of the user
 	--help/-h:		show this message
+	--additional-packages:	packages to install in addition
 	--init/-I:		whether to use or not init
 	--pre-init-hooks:	commands to execute prior to init
+	--nvidia:		try to integrate host's nVidia drivers in the guest
 	--upgrade/-U:		run init in upgrade mode
 	--verbose/-v:		show more verbosity
 	--version/-V:		show version
@@ -124,6 +128,20 @@ while :; do
 			shift
 			shift
 			;;
+		--additional-packages)
+			if [ -n "$2" ]; then
+				container_additional_packages="$2"
+			fi
+			shift
+			shift
+			;;
+		--nvidia)
+			if [ -n "$2" ]; then
+				nvidia="$2"
+				shift
+				shift
+			fi
+			;;
 		--)
 			shift
 			init_hook=$*
@@ -151,7 +169,7 @@ fi
 # Ensure the foundamental variables are set and not empty, we will not proceed if
 # they are not all set.
 if [ "${upgrade}" -eq 0 ]; then
-	[ -z "${container_user_gid}" ] && printf "Error: Invalid arguments, missing user gud\n" && exit 2
+	[ -z "${container_user_gid}" ] && printf "Error: Invalid arguments, missing user gid\n" && exit 2
 	[ -z "${container_user_home}" ] && printf "Error: Invalid argument, missing user home\n" && exit 2
 	[ -z "${container_user_name}" ] && printf "Error: Invalid arguments, missing username\n" && exit 2
 	[ -z "${container_user_uid}" ] && printf "Error: Invalid arguments, missing user uid\n" && exit 2
@@ -162,6 +180,41 @@ set -o nounset
 if [ "${verbose}" -ne 0 ]; then
 	set -o xtrace
 fi
+
+# Print mount flags considered "locked".
+# Arguments:
+# 	source_dir
+# Outputs:
+# 	Comma-separated list of locked mount flags
+get_locked_mount_flags() (
+	source_dir="$1"
+	prev_dir=""
+	locked_flags=""
+
+	! [ -d "${source_dir}" ] && return 0
+
+	# Get mount flags of given directory, using nearest mountpoint.
+	# Earlier versions of findmnt did not check parents until it found a mountpoint,
+	# so we use a workaround with dirname.
+	while true; do
+		flags="$(findmnt --noheadings --output OPTIONS --target "${source_dir}")" && break
+		prev_dir="${source_dir}"
+		source_dir="$(dirname "${source_dir}")"
+		[ "${source_dir}" = "${prev_dir}" ] && return 1
+	done
+
+	for flag in nodev noexec nosuid; do
+		case ",${flags}," in
+			*,${flag},*)
+				# Locked flag found, append to list while avoiding leading/trailing commas
+				locked_flags="${locked_flags:+${locked_flags},}${flag}"
+				;;
+			*) : ;;
+		esac
+	done
+
+	echo "${locked_flags}"
+)
 
 # Bind mount or error.
 # Arguments:
@@ -193,13 +246,17 @@ mount_bind() (
 	# if instead it's a file, create it with touch
 	elif [ -f "${source_dir}" ]; then
 		# exit if not successful
+		if ! mkdir -p "$(dirname "${target_dir}")"; then
+			printf "Warning: cannot create mount target directory: %s\n" "${target_dir}"
+			return 1
+		fi
 		if ! touch "${target_dir}"; then
 			printf "Warning: cannot create mount target file: %s\n" "${target_dir}"
 			return 1
 		fi
 	fi
 
-	# Add mountflags if needed, if no are specificed, use rslave as default.
+	# Add mountflags if needed, if no are specified, use rslave as default.
 	if [ "${mount_flags}" = "" ]; then
 		mount_flags="rslave"
 	fi
@@ -235,7 +292,8 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 	! command -v sudo || ! command -v useradd || ! command -v diff ||
 	! command -v pinentry || ! command -v wget || ! command -v curl ||
 	! command -v less || ! command -v bc || ! command -v time || ! command -v lsof ||
-	! command -v "${shell_pkg}"; then
+	! command -v "${shell_pkg}" ||
+	[ -n "${container_additional_packages}" ]; then
 
 	# Detect the available package manager
 	# install minimal dependencies needed to bootstrap the container:
@@ -277,6 +335,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 			$(apk search -q mesa-dri) \
 			$(apk search -q mesa-vulkan) \
 			vulkan-loader
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			apk add ${container_additional_packages}
+		fi
 
 	elif command -v apt-get; then
 		# If we need to upgrade, do it and exit, no further action required.
@@ -332,6 +396,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 				mesa-vulkan-drivers
 		fi
 
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			apt-get install -y ${container_additional_packages}
+		fi
+
 	elif command -v dnf; then
 		# If we need to upgrade, do it and exit, no further action required.
 		if [ "${upgrade}" -ne 0 ]; then
@@ -373,9 +443,19 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 		# These are graphics drivers for 3d applications
 		if dnf list mesa-dri-drivers > /dev/null; then
 			dnf install -y \
-				mesa-dri-drivers \
+				mesa-dri-drivers
+		fi
+
+		if dnf list mesa-vulkan-drivers > /dev/null; then
+			dnf install -y \
 				mesa-vulkan-drivers \
 				vulkan
+		fi
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			dnf install -y ${container_additional_packages}
 		fi
 
 	elif command -v emerge; then
@@ -412,6 +492,13 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 			sys-process/lsof \
 			util-linux \
 			wget
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			emerge --ask=n --autounmask-continue --noreplace --quiet-build \
+				${container_additional_packages}
+		fi
 
 	elif command -v microdnf; then
 		# If we need to upgrade, do it and exit, no further action required.
@@ -451,6 +538,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 			mesa-dri-drivers \
 			mesa-vulkan-drivers \
 			vulkan || :
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			microdnf install -y ${container_additional_packages}
+		fi
 
 	elif command -v pacman; then
 		# If we need to upgrade, do it and exit, no further action required.
@@ -497,6 +590,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 			vulkan-intel \
 			vulkan-radeon
 
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			pacman -Sy --noconfirm ${container_additional_packages}
+		fi
+
 	elif command -v slackpkg; then
 		# If we need to upgrade, do it and exit, no further action required.
 		if [ "${upgrade}" -ne 0 ]; then
@@ -533,6 +632,13 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 		yes | slackpkg install -default_answer=yes -batch=yes \
 			mesa
 
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			yes | slackpkg install -default_answer=yes -batch=yes \
+				${container_additional_packages}
+		fi
+
 	elif command -v swupd; then
 		# If we need to upgrade, do it and exit, no further action required.
 		if [ "${upgrade}" -ne 0 ]; then
@@ -554,6 +660,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 		swupd bundle-add \
 			lib-opengl \
 			devpkg-Vulkan-Loader
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			swupd bundle-add ${container_additional_packages}
+		fi
 
 	elif command -v xbps-install; then
 		# If we need to upgrade, do it and exit, no further action required.
@@ -591,6 +703,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 
 		# These are graphics drivers for 3d applications
 		xbps-install -Sy mesa-dri
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			xbps-install -Sy ${container_additional_packages}
+		fi
 
 	elif command -v yum; then
 		# If we need to upgrade, do it and exit, no further action required.
@@ -634,6 +752,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 		if yum list mesa-dri-drivers > /dev/null; then
 			yum install -y \
 				mesa-dri-drivers
+		fi
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			yum install -y ${container_additional_packages}
 		fi
 
 	elif command -v zypper; then
@@ -687,6 +811,12 @@ if [ "${upgrade}" -ne 0 ] || ! command -v find || ! command -v mount || ! comman
 		# Check if shell_pkg is available in distro's repo. If not we
 		# fall back to bash, and we set the SHELL variable to bash so
 		# that it is set up correctly for the user.
+
+		# Install additional packages passed at distrbox-create time
+		if [ -n "${container_additional_packages}" ]; then
+			# shellcheck disable=SC2086
+			zypper install -y ${container_additional_packages}
+		fi
 	else
 		printf "Error: could not find a supported package manager.\n"
 		printf "Error: could not set up base dependencies.\n"
@@ -711,7 +841,10 @@ HOST_MOUNTS_RO="
 	/var/lib/systemd/coredump
 	/var/log/journal"
 for host_mount_ro in ${HOST_MOUNTS_RO}; do
-	mount_bind /run/host"${host_mount_ro}" "${host_mount_ro}" ro
+	# Mounting read-only in a user namespace will trigger a check to see if certain
+	# "locked" flags are changed. This ensures we explicitly reuse those flags.
+	locked_flags="$(get_locked_mount_flags /run/host"${host_mount_ro}")"
+	mount_bind /run/host"${host_mount_ro}" "${host_mount_ro}" ro"${locked_flags:+,${locked_flags}}"
 done
 ###############################################################################
 
@@ -743,19 +876,19 @@ for host_mount in ${HOST_MOUNTS}; do
 done
 
 HOST_MOUNTS_RO_INIT="
-		/etc/localtime
-		/run/systemd/journal
-		/run/systemd/resolve
-		/run/systemd/seats
-		/run/systemd/sessions
-		/run/systemd/users
-		/var/lib/systemd/coredump
-		/var/log/journal"
+	/etc/localtime
+	/run/systemd/journal
+	/run/systemd/resolve
+	/run/systemd/seats
+	/run/systemd/sessions
+	/run/systemd/users
+	/var/lib/systemd/coredump
+	/var/log/journal"
 
 # On some ostree systems, home is in /var/home, but most of the software expects
 # it to be in /home. In the hosts systems this is fixed by using a symlink.
 # Do something similar here with a bind mount.
-if [ -e "/var/home/${container_user_name}" ] && [ ! -e "/home/${container_user_name}" ]; then
+if [ -e "/var/home/${container_user_name}" ]; then
 	if ! mount_bind "/run/host/var/home/${container_user_name}" "/home/${container_user_name}" rw; then
 		printf "Warning: Cannot bind mount %s to /run/host%s\n" "/var/home" "/home"
 	fi
@@ -782,7 +915,7 @@ host_sockets="$(find /run/host/run -name 'user' \
 # system dbus or user auth cache misused.
 for host_socket in ${host_sockets}; do
 	container_socket="$(printf "%s" "${host_socket}" | sed 's|/run/host||g')"
-	# Check if the socket already exists or the symlink already esists
+	# Check if the socket already exists or the symlink already exists
 	if [ ! -S "${container_socket}" ] && [ ! -L "${container_socket}" ]; then
 		# link it.
 		rm -f "${container_socket}"
@@ -793,6 +926,65 @@ for host_socket in ${host_sockets}; do
 	fi
 done
 ###############################################################################
+
+# If --nvidia, we try to integrate host's nvidia drivers in to the guest
+if [ "${nvidia}" -eq 1 ]; then
+	printf "distrobox: Setting up host's nvidia drivers integration...\n"
+
+	# First we find all non-lib files we need, this includes
+	#	- binaries
+	#	- confs
+	#	- icd files
+	#	- egl files
+	NVIDIA_FILES="$(find /run/host/usr/ \
+		-path "/run/host/usr/share/doc*" -prune -o \
+		-path "/run/host/usr/src*" -prune -o \
+		-path "/run/host/usr/lib*/modules*" -prune -o \
+		-path "/run/host/usr/share/man*" -prune -o \
+		-path "/run/host/usr/lib*" -prune -o \
+		-type f -iname "*nvidia*" -print || :)"
+	for nvidia_file in ${NVIDIA_FILES}; do
+		dest_file="$(printf "%s" "${nvidia_file}" | sed 's|/run/host||g')"
+		mount_bind "${nvidia_file}" "${dest_file}" ro
+	done
+
+	# Then we find all the ".so" libraries, there are searched separately
+	# because we need to extract the relative path to mount them in the
+	# correct path based on the guest's setup
+	NVIDIA_LIBS="$(find /run/host/usr/lib* \
+		-iname "*nvidia*.so*" \
+		-o -iname "libcuda*.so*" \
+		-o -iname "libnvcuvid*.so*" \
+		-o -iname "libnvoptix*.so*" ||
+		:)"
+	for nvidia_lib in ${NVIDIA_LIBS}; do
+		dest_file="$(printf "%s" "${nvidia_lib}" |
+			sed 's|/run/host/usr/lib/x86_64-linux-gnu/||g' |
+			sed 's|/run/host/usr/lib64/||g' |
+			sed 's|/run/host/usr/lib/||g')"
+
+		# In the guest we need to adjust the destination path, so if we're on
+		# debian based containers, we need to target /usr/lib/x86_64-linux-gnu/
+		if [ -e "/usr/lib/x86_64-linux-gnu/" ]; then
+			mount_bind "${nvidia_lib}" "/usr/lib/x86_64-linux-gnu/${dest_file}" ro
+			# /usr/lib64 is common in rpm based distros
+		elif [ -e "/usr/lib64" ]; then
+			mount_bind "${nvidia_lib}" "/usr/lib64/${dest_file}" ro
+			# fallback to /usr/lib if none of the previous
+		else
+			mount_bind "${nvidia_lib}" "/usr/lib/${dest_file}" ro
+		fi
+	done
+
+	# Refresh ldconfig cache, also detect if there are empty files remaining
+	# and clean them.
+	# This could happen when upgrading drivers and changing versions.
+	empty_libs="$(ldconfig 2>&1 | grep -Eo "File.*is empty" | cut -d' ' -f2)"
+	if [ -n "${empty_libs}" ]; then
+		# shellcheck disable=SC2086
+		rm -f ${empty_libs}
+	fi
+fi
 
 ###############################################################################
 printf "distrobox: Integrating host's themes, icons, fonts...\n"
@@ -1025,6 +1217,8 @@ if [ -n "${DISTROBOX_HOST_HOME-}"  ] && [ -d "/etc/skel" ]; then
 	done
 fi
 
+###############################################################################
+
 printf "distrobox: Executing init hooks...\n"
 # execute eventual init hooks if specified
 # shellcheck disable=SC2086
@@ -1073,6 +1267,8 @@ if [ "${init}" -eq 0 ]; then
 		sleep 15
 	done
 fi
+
+###############################################################################
 
 # If we're here, the init support has been enabled.
 printf  "distrobox: Setting up init system...\n"

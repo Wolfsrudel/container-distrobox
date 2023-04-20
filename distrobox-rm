@@ -70,7 +70,7 @@ done
 # as it's meaningless for this use case.
 if [ "$(id -ru)" -ne 0 ]; then
 	# If the DBX_SUDO_PROGRAM/distrobox_sudo_program variable was set by the
-	# user, use its value instead of "sudo". But only if not runnig the script
+	# user, use its value instead of "sudo". But only if not running the script
 	# as root (UID 0).
 	distrobox_sudo_program=${DBX_SUDO_PROGRAM:-${distrobox_sudo_program:-"sudo"}}
 fi
@@ -213,7 +213,7 @@ fi
 
 # prepend sudo (or the specified sudo program) if we want podman or docker to be rootful
 if [ "${rootful}" -ne 0 ]; then
-	container_manager="${distrobox_sudo_program:-} ${container_manager}"
+	container_manager="${distrobox_sudo_program-} ${container_manager}"
 fi
 
 # check if we have containers to delete
@@ -267,9 +267,9 @@ for container_name in ${container_name_list}; do
 		'{{range .Config.Env}}{{if slice . 0 5 | eq "HOME="}}{{slice . 5}}{{end}}{{end}}')
 	# Prompt for confirmation
 	if [ "${non_interactive}" -eq 0 ] && [ "${container_home}" != "${HOME}" ] && [ "${rm_home}" -eq 0 ]; then
-		printf "Do you want to remove custom home of container %s (%s)? [Y/n]: " "${container_name}" "${container_home}"
+		printf "Do you want to remove custom home of container %s (%s)? [y/N]: " "${container_name}" "${container_home}"
 		read -r response_rm_home
-		response_rm_home="${response_rm_home:-"Y"}"
+		response_rm_home="${response_rm_home:-"N"}"
 	elif [ "${container_home}" != "${HOME}" ]; then
 		if [ "${rm_home}" -eq 0 ]; then
 			response_rm_home="N"

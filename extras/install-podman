@@ -36,7 +36,7 @@ Options:
 EOF
 }
 
-# First thing first, chekc if we have all the dependencies.
+# First thing first, check if we have all the dependencies.
 printf >&2 "\033[1;31m Checking dependencies...\n\033[0m"
 if [ ! -e /etc/subuid ] || [ ! -e /etc/subgid ]; then
 	if ! command -v newuidmap > /dev/null; then
@@ -113,7 +113,7 @@ fi
 
 ## Get crun ###################################################################
 
-CRUN_VERSION="1.6"
+CRUN_VERSION="1.8.3"
 printf >&2 "\033[1;31m Fetching crun %s...\n\033[0m" "${CRUN_VERSION}"
 # Download the binary to /tmp
 curl -L \
@@ -125,9 +125,9 @@ chmod +x /tmp/crun
 
 ## Get podman ###################################################################
 
-PODMAN_VERSION="4.2.1"
+PODMAN_VERSION="4.4.3"
 printf >&2 "\033[1;31m Fetching podman %s...\n\033[0m" "${PODMAN_VERSION}"
-# Using static podman bulds semplifies our lifes! Thanks to the wonderful project
+# Using static podman builds semplifies our lives! Thanks to the wonderful project
 #   https://github.com/mgoltzsche/podman-static
 # All credits to @mgoltzsche for the builds.
 # Download and unpack the tar in /tmp
@@ -153,6 +153,7 @@ printf >&2 "\033[1;31m Configuring...\n\033[0m"
 cat << EOF > "${conf_path}/containers/containers.conf"
 # See https://github.com/containers/common/blob/master/pkg/config/containers.conf
 [engine]
+infra_image="k8s.gcr.io/pause:3.8"
 # can be croupfs, systemd
 cgroup_manager = "systemd"
 # can be file, journald

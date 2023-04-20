@@ -4,6 +4,7 @@
   - [Mount additional volumes in a distrobox](#mount-additional-volumes-in-a-distrobox)
   - [Use a different shell than the host](#use-a-different-shell-than-the-host)
   - [Run the container with real root](#run-the-container-with-real-root)
+  - [Run Debian/Ubuntu container behind proxy](#run-debianubuntu-container-behind-proxy)
   - [Using a command other than sudo to run a rootful container](#using-a-command-other-than-sudo-to-run-a-rootful-container)
   - [Duplicate an existing distrobox](#duplicate-an-existing-distrobox)
   - [Export to the host](#export-to-the-host)
@@ -14,6 +15,7 @@
   - [Using init system inside a distrobox](#using-init-system-inside-a-distrobox)
   - [Using distrobox as main cli](#using-distrobox-as-main-cli)
   - [Using a different architecture](#using-a-different-architecture)
+  - [Using the GPU inside the container](#using-the-gpu-inside-the-container)
   - [Slow creation on podman and image size getting bigger with distrobox create](#slow-creation-on-podman-and-image-size-getting-bigger-with-distrobox-create)
   - [Container save and restore](#container-save-and-restore)
   - [Check used resources](#check-used-resources)
@@ -103,6 +105,19 @@ And:
 
 We trust you already know the implications of running distrobox, as well as anything else,
 with the root user and that with great power comes great responsibilities.
+
+## Run Debian/Ubuntu container behind proxy
+
+It might be that you're trying to set-up your distrobox, but you're stuck behind a proxy.
+A simple solution can be crafted using `pre-init-hooks`
+
+```console
+proxy=http://my_proxy.domain.example:3128
+t="echo 'Acquire::http::Proxy \\\""${proxy}"\\\";' > /etc/apt/apt.conf.d/proxy.conf; echo 'Acquire::https::Proxy \\\""${proxy}"\\\";' >> /etc/apt/apt.conf.d/proxy.conf;"
+http_proxy="${proxy}" distrobox create --image debian --name deb --pre-init-hooks "${t}"
+```
+
+This way, we're configuring `apt` before using it.
 
 ## Using a command other than sudo to run a rootful container
 
@@ -199,7 +214,7 @@ By default distrobox will integrate with host's flatpak directory if present:
 `/var/lib/flatpak` and obviously with the $HOME one.
 
 If you want to have a separate system remote between host and container,
-you can create your distrobox with the followint init-hook:
+you can create your distrobox with the following init-hook:
 
 ```sh
 distrobox create --name test --image your-chosen-image:tag \
@@ -207,7 +222,7 @@ distrobox create --name test --image your-chosen-image:tag \
 ```
 
 After that you'll be able to have separate flatpaks between host and distrobox.
-You can procede to export them using `distrobox-export` (for distrobox 1.2.14+)
+You can proceed to export them using `distrobox-export` (for distrobox 1.2.14+)
 
 ## Using podman or docker inside a distrobox
 
@@ -225,7 +240,7 @@ sudo ln -s /usr/bin/distrobox-host-exec /usr/local/bin/docker
 ```
 
 This will create a `podman` or `docker` command inside the distrobox that will
-trasparently execute the command on the host.
+transparently execute the command on the host.
 
 ## Using init system inside a distrobox
 
@@ -299,6 +314,28 @@ aarch64
 ```
 
 ![image](https://user-images.githubusercontent.com/598882/170837120-9170a9fa-6153-4684-a435-d60a0136b563.png)
+
+## Using the GPU inside the container
+
+For Intel and AMD Gpus, the support is backed in, as the containers will install
+their latest available mesa/dri drivers.
+
+For NVidia, you can use the `--nvidia` flag during create, see [distrobox-create](./usage/distrobox-create.md)
+documentation to discover how to use it.
+
+```console
+~$ distrobox create --nvidia --name ubuntu-nvidia --image ubuntu:latest
+```
+
+### Using nvidia-container-toolkit
+
+Alternatively from the `--nvidia` flag, you can use NVidia's own [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html).
+After following the [official guide to set nvidia-ctk up](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html)
+you can use it from distrobox doing:
+
+```console
+distrobox create --name example-nvidia-toolkit --additional-flags "--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=all" --image nvidia/cuda
+```
 
 ## Slow creation on podman and image size getting bigger with distrobox create
 
@@ -407,7 +444,7 @@ these flags only work during container creation (`podman create` / `podman run`)
 (`podman exec`, which is used by Distrobox to execute commands inside of container), which means changing resource
 limitation requires recreation of a container.
 
-Nontheless you can still apply resource limitation using systemd's resource control functionality. It's not recommended
+Nonetheless you can still apply resource limitation using systemd's resource control functionality. It's not recommended
 to pass resource limitation arguments (e.g. `--cpuset-cpus` and `--memory`) to `distrobox create --additional-flags`
 as systemd already provides much more flexible resource control functionality.
 

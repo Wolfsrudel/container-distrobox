@@ -15,9 +15,9 @@ graphical apps (X11/Wayland), and audio.
 
 **distrobox create**
 
-	--image/-i:		image to use for the container	default: registry.fedoraproject.org/fedora-toolbox:36
-	--name/-n:		name for the distrobox		default: my-distrobox
-	--pull/-p:		pull latest image unconditionally without asking
+	--image/-i:		image to use for the container
+	--name/-n:		name for the distrobox
+	--pull/-p:		pull the image even if it exists locally (implies --yes)
 	--yes/-Y:		non-interactive, pull images without asking
 	--root/-r:		launch podman/docker with root privileges. Note that if you need root this is the preferred
 				way over "sudo distrobox" (note: if using a program other than 'sudo' for root privileges is necessary,
@@ -25,16 +25,20 @@ graphical apps (X11/Wayland), and audio.
 	--clone/-c:		name of the distrobox container to use as base for a new container
 				this will be useful to either rename an existing distrobox or have multiple copies
 				of the same environment.
-	--home/-H		select a custom HOME directory for the container. Useful to avoid host's home littering with temp files.
-	--volume		additional volumes to add to the container
+	--home/-H:		select a custom HOME directory for the container. Useful to avoid host's home littering with temp files.
+	--volume:		additional volumes to add to the container
 	--additional-flags/-a:	additional flags to pass to the container manager command
-	--init-hooks		additional commands to execute during container initialization
-	--pre-init-hooks	additional commands to execute prior to container initialization
-	--init/-I		use init system (like systemd) inside the container.
+	--additional-packages/-ap:	additional packages to install during initial container setup
+	--init-hooks:		additional commands to execute during container initialization
+	--pre-init-hooks:	additional commands to execute prior to container initialization
+	--init/-I:		use init system (like systemd) inside the container.
 				this will make host's processes not visible from within the container.
+	--nvidia:		try to integrate host's nVidia drivers in the guest
+	--unshare-netns:        do not share the net namespace with host
+	--unshare-ipc:          do not share ipc namemspace with host
 	--compatibility/-C:	show list of compatible images
 	--help/-h:		show this message
-	--no-entry:             do not generate a container entry in the application list
+	--no-entry:		do not generate a container entry in the application list
 	--dry-run/-d:		only print the container manager command generated
 	--verbose/-v:		show more verbosity
 	--version/-V:		show version
@@ -48,20 +52,55 @@ graphical apps (X11/Wayland), and audio.
 
 # EXAMPLES
 
-	distrobox create --image alpine:latest --name test --init-hooks "touch /var/tmp/test1 && touch /var/tmp/test2"
-	distrobox create --image fedora:35 --name test --additional-flags "--env MY_VAR-value"
-	distrobox create --image fedora:35 --name test --volume /opt/my-dir:/usr/local/my-dir:rw --additional-flags "--pids-limit -1"
-	distrobox create -i docker.io/almalinux/8-init --init --name test --pre-init-hooks "dnf config-manager --enable powertools && dnf -y install epel-release"
-	distrobox create --clone fedora-35 --name fedora-35-copy
+Create a distrobox with image alpine, called my-alpine container
+
 	distrobox create --image alpine my-alpine-container
+
+Create a distrobox from fedora-toolbox:35 image
+
 	distrobox create --image registry.fedoraproject.org/fedora-toolbox:35 --name fedora-toolbox-35
+
+Clone an existing distrobox container
+
+	distrobox create --clone fedora-35 --name fedora-35-copy
+
+Always pull for the new image when creating a distrobox
+
 	distrobox create --pull --image centos:stream9 --home ~/distrobox/centos9
 
-You can also use environment variables to specify container name, image and container manager:
+Add additional environment variables to the container
+
+	distrobox create --image fedora:35 --name test --additional-flags "--env MY_VAR=value"
+
+Add additional volumes to the container
+
+	distrobox create --image fedora:35 --name test --volume /opt/my-dir:/usr/local/my-dir:rw --additional-flags "--pids-limit -1"
+
+Add additional packages to the container
+
+	distrobox create --image alpine:latest --name test2 --additional-packages "git tmux vim"
+
+Use init-hooks to perform an action during container startup
+
+	distrobox create --image alpine:latest --name test --init-hooks "touch /var/tmp/test1 && touch /var/tmp/test2"
+
+Use pre-init-hooks to perform an action at the beginning of the container startup (before any package manager starts)
+
+	distrobox create -i docker.io/almalinux/8-init --init --name test --pre-init-hooks "dnf config-manager --enable powertools && dnf -y install epel-release"
+
+Use host's NVidia drivers integration
+
+	distrobox create --image ubuntu:22.04 --name ubuntu-nvidia --nvidia
+
+Use environment variables to specify container name, image and container manager:
 
 	DBX_CONTAINER_MANAGER="docker" DBX_NON_INTERACTIVE=1 DBX_CONTAINER_NAME=test-alpine DBX_CONTAINER_IMAGE=alpine distrobox-create
 
-Supported environment variables:
+Do not use host's IP inside the container:
+
+	distrobox create --image ubuntu:latest --name test --unshare-netns
+
+# ENVIRONMENT VARIABLES
 
 	DBX_CONTAINER_ALWAYS_PULL
 	DBX_CONTAINER_CUSTOM_HOME
@@ -74,6 +113,8 @@ Supported environment variables:
 
 DBX_CONTAINER_HOME_PREFIX defines where containers' home directories will be located.
 If you define it as ~/dbx then all future containers' home directories will be ~/dbx/$container_name
+
+# EXTRA
 
 The `--additional-flags` or `-a` is useful to modify defaults in the container creations.
 For example:
@@ -97,7 +138,7 @@ same standard as `docker` and `podman` to specify the mount point so `--volume S
 During container creation, it is possible to specify (using the additional-flags) some
 environment variables that will persist in the container and be independent from your environment:
 
-	distrobox create --image fedora:35 --name test --additional-flags "--env MY_VAR-value"
+	distrobox create --image fedora:35 --name test --additional-flags "--env MY_VAR=value"
 
 The `--init-hooks` is useful to add commands to the entrypoint (init) of the container.
 This could be useful to create containers with a set of programs already installed, add users, groups.
@@ -131,3 +172,26 @@ but will ensure that configs and dotfiles will not litter it.
 
 From version 1.4.0 of distrobox, when you create a new container, it will also generate
 an entry in the applications list.
+
+## NVidia integration
+
+If your host has an NVidia gpu, with installed proprietary drivers, you can integrate
+them with the guests by using the `--nvidia` flag:
+
+`distrobox create --nvidia --image ubuntu:latest --name ubuntu-nvidia`
+
+Be aware that **this is not compatible with non-glibc systems** and **needs somewhat newer
+distributions to work**.
+
+This feature was tested working on:
+
+- Almalinux
+- Archlinux
+- Centos 7 and newer
+- Clearlinux
+- Debian 10 and newer
+- OpenSUSE Leap
+- OpenSUSE Tumbleweed
+- Rockylinux
+- Ubuntu 18.04 and newer
+- Void Linux (glibc)
