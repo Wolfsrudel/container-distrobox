@@ -10,4 +10,4 @@ if [ -e "${HOME}/.local/share/bash-completion/completions/distrobox" ]; then
 	source "${HOME}/.local/share/bash-completion/completions/distrobox"
 fi
 
-complete -F _generate_from_help distrobox-enter
+complete -F _generate_from_help distrobox-assemble
